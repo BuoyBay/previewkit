@@ -1,0 +1,18 @@
+Import previewkit
+
+Window PreviewExample
+    Title = "PreviewKit library example"
+    Frame = (80, 80, 360, 140)
+    Control Label greeting
+        Text = "This is a native control"
+        Frame = (24, 24, 300, 28)
+    End Control
+End Window
+
+Sub Main()
+    Dim window As New PreviewExample()
+    Dim session As New PreviewSession(window)
+    session.Track("greeting", window.greeting)
+    session.Show()
+    Application.Run()
+End Sub

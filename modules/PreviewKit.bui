@@ -1,0 +1,148 @@
+''' A timer-owned readiness callback; not a platform capture implementation.
+Public Class PreviewReadyTimer Inherits Timer
+    Public Property Session As PreviewSession
+
+    Public Overrides Sub NotifyTick()
+        Me.Stop()
+        Dim current As PreviewSession = Me.Session
+        Me.Session = Nil
+        If current <> Nil Then current.PublishReady()
+    End Sub
+End Class
+
+''' Reusable native preview host. Construct and use only on the UI thread.
+''' This runs real control code; it provides no security sandbox.
+Public Class PreviewSession
+    Public ReadOnly Property Host As Window
+    Public Property ReadyPath As String = "_buoy_preview_ready.json"
+    Public Property ApplicationMenu As MenuBar
+    Private Property mNames As Array Of String = []
+    Private Property mControls As Array Of UIControl = []
+    Private Property mClock As PreviewReadyTimer
+
+    Public Sub Constructor(host As Window)
+        If host = Nil Then Throw New InvalidArgumentException("A preview window is required")
+        Me.Host = host
+    End Sub
+
+    ''' Register a named runtime control. Bounds are relative to its actual parent.
+    Public Sub Track(member As String, control As UIControl)
+        If String.Len(member) = 0 Or control = Nil Then Throw New InvalidArgumentException("A control and member name are required")
+        If Array.Contains(Me.mNames, member) Then Throw New InvalidArgumentException("Duplicate preview member")
+        Me.mNames.Append(member)
+        Me.mControls.Append(control)
+    End Sub
+
+    ''' Snapshot values after layout. This does not capture or analyze pixels.
+    Public Function Snapshot() As JSONItem
+        Dim info As JSONItem = JSONItem.NewObject()
+        info.Value("title") = Me.Host.Title
+        info.Value("width") = Me.Host.Width
+        info.Value("height") = Me.Host.Height
+        info.Value("scale") = Me.Host.ScaleFactor
+        Dim controls As JSONItem = JSONItem.NewArray()
+        For i As Integer = 0 To Array.Count(Me.mNames) - 1
+            Dim control As UIControl = Me.mControls(i)
+            Dim item As JSONItem = JSONItem.NewObject()
+            item.Value("member") = Me.mNames(i)
+            item.Value("x") = control.X
+            item.Value("y") = control.Y
+            item.Value("width") = control.Width
+            item.Value("height") = control.Height
+            item.Value("visible") = control.Visible
+            item.Value("enabled") = control.Enabled
+            item.Value("accessibleLabel") = control.AccessibleLabel
+            item.Value("accessibilityEvidence") = "buoy-properties; native provider associations unverified"
+            item.Value("accessibleHint") = control.AccessibleHint
+            item.Value("accessibleRole") = control.AccessibleRole.RawValue
+            item.Value("accessibleHidden") = control.AccessibleHidden
+            item.Value("focusable") = control.Focusable
+            item.Value("coordinateSpace") = "parent"
+            If control IsA Splitter Then
+                Dim splitter As Splitter = CType(control, Splitter)
+                Dim split As JSONItem = JSONItem.NewObject()
+                split.Value("paneCount") = splitter.PaneCount
+                Dim panes As JSONItem = JSONItem.NewArray()
+                For p As Integer = 0 To splitter.PaneCount - 1
+                    Dim pane As SplitterPane = splitter.Pane(p)
+                    Dim state As JSONItem = JSONItem.NewObject()
+                    state.Value("size") = pane.Size
+                    state.Value("minimum") = pane.EffectiveMinSize
+                    state.Value("maximum") = pane.EffectiveMaxSize
+                    state.Value("collapsed") = pane.Collapsed
+                    panes.Add(state)
+                Next
+                split.Value("panes") = panes
+                item.Value("splitter") = split
+            End If
+            controls.Add(item)
+        Next
+        info.Value("controls") = controls
+        info.Value("menus") = Me.MenuSnapshot()
+        Return info
+    End Function
+
+    ''' Observe menu objects, not their callback behaviour or native system menus.
+    Public Function MenuSnapshot() As JSONItem
+        Dim bar As MenuBar = Me.Host.MenuBar
+        Dim origin As String = "window"
+        Dim known As Boolean = True
+        #If TargetMac Then
+            If bar = Nil Then
+                bar = Me.ApplicationMenu
+                origin = "application"
+                If bar = Nil Then known = False
+            End If
+        #End If
+        Dim observed As JSONItem = JSONItem.NewObject()
+        observed.Value("attached") = bar <> Nil
+        If Not known Then observed.Value("attached") = JSONItem.Null()
+        observed.Value("source") = origin
+        observed.Value("coverage") = "first-level-items; callback behaviour unverified"
+        Dim items As JSONItem = JSONItem.NewArray()
+        If bar <> Nil Then
+            For Each menu As Menu In bar.Menus()
+                For i As Integer = 0 To menu.Count() - 1
+                    Dim command As MenuItem = menu.Item(i)
+                    Dim item As JSONItem = JSONItem.NewObject()
+                    item.Value("menu") = menu.Caption
+                    item.Value("caption") = command.Caption
+                    item.Value("tag") = command.Tag
+                    item.Value("shortcut") = command.Shortcut
+                    item.Value("enabled") = command.Enabled
+                    items.Add(item)
+                Next
+            Next
+        End If
+        observed.Value("items") = items
+        Return observed
+    End Function
+
+    ''' Show the window and publish a snapshot once the event loop has advanced.
+    ''' A capture backend must still wait for native pixels to settle.
+    Public Sub Show(delayMilliseconds As Integer = 250)
+        If delayMilliseconds < 1 Then Throw New InvalidArgumentException("Readiness delay must be positive")
+        Me.CancelReadiness()
+        Me.Host.Show()
+        Me.mClock = New PreviewReadyTimer()
+        Me.mClock.Session = Me
+        Me.mClock.Period = delayMilliseconds
+        Me.mClock.Count = 1
+        Me.mClock.Start()
+    End Sub
+
+    ''' Stop pending publication when a host closes or abandons its preview.
+    Public Sub CancelReadiness()
+        If Me.mClock = Nil Then Exit Sub
+        Me.mClock.Stop()
+        Me.mClock.Session = Nil
+        Me.mClock = Nil
+    End Sub
+
+    ''' Publish JSON to the configured path; consumers retry incomplete reads.
+    Public Sub PublishReady()
+        Dim file As New FileSystemItem(Me.ReadyPath)
+        Dim written As Result Of Integer, String = file.WriteAllText(Me.Snapshot().ToString())
+        If Not written.IsOk Then Throw New Exception(written.Error)
+    End Sub
+End Class

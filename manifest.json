@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "name": "previewkit",
+  "version": "0.1.0",
+  "description": "Native preview hosting, named control snapshots and readiness publication"
+}
