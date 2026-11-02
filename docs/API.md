@@ -13,8 +13,7 @@ native accessibility-provider audit. Control coordinates are relative to their p
 layout units; they are not screenshot pixel coordinates. Track is explicit and
 does not require reflection or a second layout parser.
 
-The standalone library example (not included in this repository) uses this
-API directly, with no Python runner or MCP server.
+The [native window example](../examples/preview_session.bui) tracks a label through this API.
 
 Call `Show()` on the UI thread, then drive `Application.Run()`. Show publishes
 a JSON snapshot to `ReadyPath` after the event loop advances (250 ms by default).
@@ -42,3 +41,7 @@ the typed application instance when the window inherits it. An unprovided
 application fallback is reported as unknown, rather than absent. Callback and
 keyboard behaviour need separate interaction probes; merely observing a command
 tag or enabled menu item does not test dispatch.
+
+Builder context: run shared `tools/` commands from the assembled
+[BuoyBay workspace](https://github.com/BuoyBay/workspace-tools). The scripts live
+in [devtools](https://github.com/BuoyBay/devtools), alongside the shared build inputs.
