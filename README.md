@@ -1,4 +1,4 @@
-# Host native previews and publish control snapshots
+# Native preview host and control snapshots
 
 `New PreviewSession(hostWindow)` wraps an existing Window. `Track(memberName,
 control)` registers each control whose bounds should appear in `Snapshot()`.
@@ -22,7 +22,7 @@ consumer project for reproducible installs.
 
 ## Example
 
-```buoy
+```basic
 Import previewkit
 
 Window PreviewExample
