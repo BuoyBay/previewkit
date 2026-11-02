@@ -2,5 +2,5 @@
   "schema": 1,
   "name": "previewkit",
   "version": "0.1.0",
-  "description": "Native preview host and control snapshots"
+  "description": "Native preview host"
 }

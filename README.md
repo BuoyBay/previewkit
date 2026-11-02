@@ -1,4 +1,4 @@
-# Native preview host and control snapshots
+# Native preview host
 
 `New PreviewSession(hostWindow)` wraps an existing Window. `Track(memberName,
 control)` registers each control whose bounds should appear in `Snapshot()`.
